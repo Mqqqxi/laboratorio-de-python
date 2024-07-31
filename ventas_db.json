@@ -1,0 +1,62 @@
+{
+    "2222aaaa": {
+        "id_venta": "2222aaaa",
+        "id_producto": "5123tyty",
+        "dnicliente": 42599907,
+        "nomcliente": "Maxi",
+        "apecliente": "Milesi",
+        "fecha": "2024-10-12",
+        "productovend": "termo",
+        "precio": "2222aaaa",
+        "dirlocal": "santa fe",
+        "nomvendedor": "jorge"
+    },
+    "2412tree": {
+        "id_venta": "2412tree",
+        "id_producto": "231",
+        "dnicliente": 10231541,
+        "nomcliente": "Marce",
+        "apecliente": "Rep",
+        "fecha": "2023-09-20",
+        "productovend": "vaso",
+        "precio": 1000.0,
+        "dirlocal": "chubut",
+        "nomvendedor": "ricardo"
+    },
+    "6621pp": {
+        "id_venta": "6621pp",
+        "id_producto": "5412bq",
+        "dnicliente": 21541651,
+        "nomcliente": "Maria",
+        "apecliente": "Luz",
+        "fecha": "2023-07-15",
+        "productovend": "cable",
+        "precio": 2100.0,
+        "direnvio": "mendoza",
+        "metodopago": "uala"
+    },
+    "le2134": {
+        "id_venta": "le2134",
+        "id_producto": "231a34b",
+        "dnicliente": 29541231,
+        "nomcliente": "Luis",
+        "apecliente": "Perez",
+        "fecha": "2021-06-21",
+        "productovend": "mouse",
+        "precio": 6000.0,
+        "dirlocal": "jujuy",
+        "nomvendedor": "thomas"
+    },
+    "1256b21": {
+        "id_venta": "1256b21",
+        "id_producto": "23123gewr",
+        "dnicliente": 25123156,
+        "nomcliente": "Mauricio",
+        "apecliente": "Macri",
+        "fecha": "2020-01-15",
+        "productovend": "lapiz",
+        "precio": 1500.0,
+        "direnvio": "buenos aires",
+        "metodopago": "mercado pago"
+    }
+}
