@@ -1,6 +1,7 @@
 import os
 import platform
 import re
+from datetime import datetime, date
 
 from lab_python import (
     VentaOnline,
@@ -34,12 +35,10 @@ def agregar_venta(gestion, tipo_venta):
 
         if tipo_venta == '1':
             dirlocal = input('Ingrese la direccion del local donde se vendio: ')
-            nomvendedor = input('Ingrese el nombre del vendedor: ')
-            venta = VentaLocal(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,dirlocal,nomvendedor)
+            venta = VentaLocal(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,dirlocal)
         elif tipo_venta == '2':
             direnvio = input('Ingrese direccion de envio: ')
-            metodopago = input('Ingrese el metodo de pago: ')
-            venta = VentaOnline(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,direnvio, metodopago)
+            venta = VentaOnline(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,direnvio)
         else:
             print('Opción inválida')
             return
@@ -84,18 +83,24 @@ def eliminar_venta_por_id(gestion):
     input('Presione enter para continuar...')
 
 def mostrar_todos_las_ventas(gestion):
-    print('=============== Listado completo de las Ventas ==============')
-    for ventas in gestion.leer_datos().values(): #concatena los valores
-        if 'nomvendedor' in ventas: 
-            print(f"dni cliente: {ventas['dnicliente']} - nomvendedor: {ventas['nomvendedor']}")
-        else:
-            print(f"dni cliente: {ventas['dnicliente']} - direnvio: {ventas['direnvio']}")
+    print('=============== Listado completo de las ventas ==============')
+    try:
+        ventas = gestion.leer_todos_las_ventas()
+        for venta in ventas:
+            if isinstance(venta, VentaLocal):
+                print(f'{venta.dnicliente} {venta.apecliente} {venta.dirlocal}')
+            elif isinstance(venta, VentaOnline):
+                print(f'{venta.dnicliente} {venta.apecliente} {venta.direnvio}')
+
+    except Exception as e:
+        print(f'Error al mostrar las ventas {e}')
+
+
     print('=====================================================================')
     input('Presione enter para continuar...')
 
 if __name__ == "__main__":
-    archivo_ventas = 'ventas_db.json' #crea el archivo y se guarda aca
-    gestion = GestionVentas(archivo_ventas) #instancia obj de gestion
+    gestion = GestionVentas() 
 
     while True:
         mostrar_menu()

@@ -14,10 +14,14 @@ Persistir los datos en archivo JSON.
 #ventalocal -> direccion tienda, nomvendedor
 #ventaonline -> direccion de envio, metodo de pago
 
-
+import mysql.connector
+from mysql.connector import Error
+from decouple import config
 import json
 import re
-from datetime import datetime
+from datetime import datetime, date
+
+
        #metodo init inicializa a los atributos
 class Venta:  #self hace ref a todos los atributos
     def __init__(self,id_venta,id_producto,dnicliente,nomcliente, apecliente, fecha, productovend,precio):   #init constructor -> metodo especial de py 
@@ -108,12 +112,22 @@ class Venta:  #self hace ref a todos los atributos
             raise ValueError(f"Error de validación del ID: {e}")
 
 
+
     def validar_fecha(self, fecha):
         try:
+            # Si la fecha ya es un objeto datetime.date, connvertir a string
+            if isinstance(fecha, date): 
+                fecha = fecha.strftime('%Y-%m-%d')
+            # Luego valida el string en formato AAAA-MM-DD
             datetime.strptime(fecha, '%Y-%m-%d')
             return fecha
         except ValueError:
             raise ValueError("La fecha debe tener el formato AAAA-MM-DD.")
+    
+
+
+        
+
         
     def validar_precio(self, precio):
         try:
@@ -141,55 +155,71 @@ class Venta:  #self hace ref a todos los atributos
         return f"{self.nomcliente} {self.apecliente}"
 
 class VentaLocal(Venta): #hereda todo de colab
-    def __init__(self,id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,dirlocal,nomvendedor): #metodo init inicialia los valores propios
+    def __init__(self,id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,dirlocal): #metodo init inicialia los valores propios
         super().__init__(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio) #super llama  al init(o a cualquier metodo) de la superclasey se instancia con los valores de la superclase y se agreg dep
         self.__dirlocal = dirlocal
-        self.__nomvendedor = self.validar_nombreape(nomvendedor) #hereda el metodo de venta
+
 
     @property
     def dirlocal(self):
         return self.__dirlocal
     
-    @property
-    def nomvendedor(self):
-        return self.__nomvendedor
+
 
     def to_dict(self): #utiliza el mismo metodo de arriba(pasa a dicc) y agrega dep
         data = super().to_dict()
         data["dirlocal"] = self.dirlocal
-        data["nomvendedor"] = self.nomvendedor
 
         return data
 
     def __str__(self):  
-        return f"{super().__str__()} - Direccion local: {self.dirlocal}- nombre vendedor: {self.nomvendedor}"
+        return f"{super().__str__()} - Direccion local: {self.dirlocal}"
 
 class VentaOnline(Venta):
-    def __init__(self,id_venta, id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,direnvio, metodopago):
+    def __init__(self,id_venta, id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio,direnvio):
         super().__init__(id_venta,id_producto,dnicliente ,nomcliente, apecliente, fecha, productovend,precio)
         self.__direnvio = direnvio
-        self.__metodopago = metodopago
 
     @property
     def direnvio(self):
         return self.__direnvio
     
-    @property
-    def metodopago(self):
-        return self.__metodopago
+
 
     def to_dict(self):
         data = super().to_dict()
         data["direnvio"] = self.direnvio
-        data["metodopago"] = self.metodopago
         return data
 
     def __str__(self):
-        return f"{super().__str__()} - direccion envio: {self.direnvio}- Metodo de pago: {self.metodopago}"
+        return f"{super().__str__()} - direccion envio: {self.direnvio}"
 
 class GestionVentas:  #se aplica al CRUD a este clase
-    def __init__(self, archivo):
-        self.archivo = archivo #inicializamos el archivo
+    def __init__(self):
+        self.host = config('DB_HOST') #inicializamos el archivo
+        self.database = config('DB_NAME')
+        self.user = config('DB_USER')
+        self.password = config('DB_PASSWORD')
+        self.port= config('DB_PORT')
+
+    def connect(self):
+        '''Establecer una conexión con la base de datos'''
+        try:
+            connection = mysql.connector.connect(
+                host=self.host,
+                database=self.database,
+                user=self.user,
+                password=self.password,
+                port=self.port
+            )
+
+            if connection.is_connected():
+                return connection
+
+        except Error as e:
+            print(f'Error al conectar a la base de datos: {e}')
+            return None
+
 
     def leer_datos(self):
         try:
@@ -211,56 +241,175 @@ class GestionVentas:  #se aplica al CRUD a este clase
         except Exception as error:
             print(f'Error inesperado: {error}')
 
-    def crear_venta(self, venta):
+    def crear_venta(self, venta):         
         try:
-            datos = self.leer_datos() #primero se lee los datos del json
-            id_venta   = venta.id_venta   
-            if not str(id_venta) in datos.keys(): #busca si el id_venta ya existe
-                datos[id_venta] = venta.to_dict() #si no existe, se crea, to_dict porq es el dicc que tiene todos los atributos 
-                self.guardar_datos(datos) #json anterior + lo nuevo q se agrego
-                print(f'Se guardo con exito')
-            else: #si ya existe
-                print(f'Venta  con id {id_venta } ya existe')
+            connection = self.connect()
+            if connection:
+                with connection.cursor() as cursor:
+                    #verif si idventa ya existe
+                    cursor.execute('SELECT id_venta FROM venta WHERE id_venta = %s', (venta.id_venta,))
+                    if cursor.fetchone():
+                        print(f'Error: Ya existe venta con ese id {venta.id_venta}')
+                        return
+                    
+                    # Insertar venta dependiendo del tipo
+                    if isinstance(venta,VentaLocal):
+                        query = '''
+                        INSERT INTO venta (id_venta,id_producto,dnicliente,nomcliente,apecliente,fecha,productovend,precio)
+                        VALUES (%s, %s, %s, %s, %s,%s,%s,%s)
+                        '''
+                        cursor.execute(query, (venta.id_venta, venta.id_producto,venta.dnicliente,venta.nomcliente,venta.apecliente,venta.fecha,venta.productovend,venta.precio))
+
+                        query = '''
+                        INSERT INTO ventalocal (id_venta,id_producto,dnicliente,nomcliente,apecliente,fecha,productovend,precio,dirlocal)
+                        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s)
+                        '''
+
+                        cursor.execute(query, (venta.id_venta, venta.id_producto,venta.dnicliente,venta.nomcliente,venta.apecliente,venta.fecha,venta.productovend,venta.precio,venta.dirlocal))
+
+                    elif isinstance(venta, VentaOnline):
+                        query = '''
+                        INSERT INTO venta (id_venta,id_producto,dnicliente,nomcliente,apecliente,fecha,productovend,precio)
+                        VALUES (%s, %s, %s, %s, %s,%s,%s,%s)
+                        '''
+                        cursor.execute(query, (venta.id_venta, venta.id_producto,venta.dnicliente,venta.nomcliente,venta.apecliente,venta.fecha,venta.productovend,venta.precio))
+
+                        query = '''
+                        INSERT INTO ventaonline (id_venta,id_producto,dnicliente,nomcliente,apecliente,fecha,productovend,precio,direnvio)
+                        VALUES (%s, %s, %s, %s, %s,%s,%s,%s,%s)
+                        '''
+
+                        cursor.execute(query, (venta.id_venta, venta.id_producto,venta.dnicliente,venta.nomcliente,venta.apecliente,venta.fecha,venta.productovend,venta.precio,venta.direnvio))
+
+                    connection.commit()
+                    print(f'venta {venta.id_venta} creada correctamente')
         except Exception as error:
-            print(f'Error inesperado al crear venta: {error}')
+            print(f'Error inesperado al crear la venta: {error}')
+
 
     def leer_venta(self, id_venta):
         try:
-            datos = self.leer_datos() #leemos los datos del json
-            if id_venta in datos:
-                venta_data = datos[id_venta] #id_venta porq se identifica por id_venta el diccionario
-                if 'dirlocal' in venta_data:
-                    venta = VentaLocal(**venta_data) #** porq es diccionario
-                else:
-                    venta = VentaOnline(**venta_data)
-                print(f'venta encontrada con id {id_venta}')
-            else:
-                print(f'No se encontró venta con id {id_venta}')
-        except Exception as e:
-            print(f'Error al leer venta: {e}')
+            connection = self.connect()
+            if connection:
+                with connection.cursor(dictionary=True) as cursor:
+                    cursor.execute('SELECT * FROM venta WHERE id_venta = %s', (id_venta,))  #, porq es una tupla
+                    id_ventadata= cursor.fetchone()
+
+                    if id_ventadata:
+                        cursor.execute('SELECT dirlocal FROM ventalocal WHERE id_venta = %s', (id_venta,))
+                        dirlocal = cursor.fetchone()
+
+                        if dirlocal:
+                            id_ventadata['dirlocal'] = dirlocal['dirlocal']
+                            venta = VentaLocal(**id_ventadata)
+                        else: #ventaonline
+                            cursor.execute('SELECT direnvio FROM ventaonline WHERE id_venta = %s', (id_venta,))
+                            direnvio = cursor.fetchone()
+                            if direnvio:
+                                id_ventadata['direnvio'] = direnvio['direnvio']
+                                venta = VentaOnline(**id_ventadata) # se manda el diccionario
+                            else:
+                                venta = Venta(**id_ventadata)
+
+                        print(f'Venta encontrada: {venta}')
+
+                    else:
+                        print(f'No se encontró venta con idventa {id_venta}.')
+
+        except Error as e:
+                print('Error al leer la venta: {e}')
+        finally:
+            if connection.is_connected():
+                connection.close()
 
 
 
     def actualizar_venta(self, id_venta, nuevo_id):
+        '''Actualizar el idproducto de una venta en al base de datos'''
         try:
-            datos = self.leer_datos()
-            if str(id_venta) in datos.keys(): #se accede a las keys
-                 datos[id_venta]['id_producto'] = nuevo_id 
-                 self.guardar_datos(datos) 
-                 print(f'Id producto actualizado para id venta:{id_venta}')
-            else:
-                print(f'No se encontró Id producto con id venta:{id_venta}')
+            connection = self.connect()
+            if connection:
+                with connection.cursor() as cursor:
+                    # Verificar si el idventa existe
+                    cursor.execute('SELECT * FROM venta WHERE id_venta = %s', (id_venta,))
+                    if not cursor.fetchone():
+                        print(f'No se encontro venta con idventa {id_venta}.')
+                        return #termina todo, sino sigue con la actualizacion
+                    
+                    # Actualizar idproducto
+                    cursor.execute('UPDATE venta SET id_producto = %s WHERE id_venta = %s', (nuevo_id, id_venta))
+
+                    if cursor.rowcount > 0:  #cuenta filas
+                        connection.commit()
+                        print(f'Id de producto actualizado para la venta con ID: {id_venta}')
+                    else:
+                        print(f'no se encontró la venta con ID: {id_venta}')
+
         except Exception as e:
-            print(f'Error al actualizar el id del producto: {e}')
+            print(f'Error al actualizar el ID: {e}')
+        finally:
+            if connection.is_connected():
+                connection.close()
 
     def eliminar_venta(self, id_venta):
         try:
-            datos = self.leer_datos()
-            if str(id_venta) in datos.keys():
-                 del datos[id_venta] #del elimina si encuentra, el objeto completo elimina
-                 self.guardar_datos(datos)
-                 print(f'Producto id:{id_venta} eliminado correctamente')
-            else:
-                print(f'No se encontró producto con id:{id_venta}')
+            connection = self.connect()
+            if connection:
+                with connection.cursor() as cursor:
+                   # Verificar si idventa existe
+                    cursor.execute('SELECT * FROM venta WHERE id_venta = %s', (id_venta,))
+                    if not cursor.fetchone():
+                        print(f'No se encontro venta con ID {id_venta}.')
+                        return 
+
+                    # Eliminar la venta
+                    cursor.execute('DELETE FROM ventalocal WHERE id_venta = %s', (id_venta,))
+                    cursor.execute('DELETE FROM ventaonline WHERE id_venta = %s', (id_venta,))
+                    cursor.execute('DELETE FROM venta WHERE id_venta = %s', (id_venta,))
+                    if cursor.rowcount > 0:
+                        connection.commit()
+                        print(f'Venta con ID: {id_venta} eliminado correctamente')
+                    else:
+                        print(f'No se encontró venta con ID : {id_venta}')
+
         except Exception as e:
-            print(f'Error al eliminar el producto: {e}')
+            print(f'Error al eliminar la venta: {e}')
+        finally:
+            if connection.is_connected():
+                connection.close()
+
+
+    def leer_todos_las_ventas(self):
+        try:
+            connection = self.connect()
+            if connection:
+                with connection.cursor(dictionary=True) as cursor:
+                    cursor.execute('SELECT * FROM venta')
+                    ventas_data = cursor.fetchall()  #trae todos las ventas
+
+                    ventas = []  #lista
+                    
+                    for venta_data in ventas_data:
+                        id_venta = venta_data['id_venta']
+
+                        cursor.execute('SELECT dirlocal FROM ventalocal WHERE id_venta = %s', (id_venta,))
+                        dirlocal = cursor.fetchone()
+
+                        if dirlocal:
+                            venta_data['dirlocal'] = dirlocal['dirlocal']
+                            venta= VentaLocal(**venta_data)
+                        else:
+                            cursor.execute('SELECT direnvio FROM ventaonline WHERE id_venta = %s', (id_venta,))
+                            direnvio = cursor.fetchone()
+                            venta_data['direnvio'] = direnvio['direnvio']
+                            venta = VentaOnline(**venta_data)
+
+                        ventas.append(venta)
+
+        except Exception as e:
+            print(f'Error al mostrar las ventas: {e}')
+        else:
+            return ventas
+        finally:
+            if connection.is_connected():
+                connection.close()
